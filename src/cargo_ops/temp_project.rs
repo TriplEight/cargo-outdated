@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use anyhow::{anyhow, Context, Error};
+use anyhow::{anyhow, Context};
 use cargo::core::{Dependency, PackageId, QueryKind, Source, Summary, Verbosity, Workspace};
 use cargo::ops::{update_lockfile, UpdateOptions};
 use cargo::sources::config::SourceConfigMap;
@@ -640,18 +640,27 @@ impl<'tmp> TempProject<'tmp> {
         tmp_root: &Path,
         tmp_manifest: &Path,
         skipped: &mut HashSet<String>,
-    ) -> Result<(), Error> {
+    ) -> CargoResult<()> {
+        // Collect all the dependency names in the table
         let dep_names: Vec<_> = dependencies.keys().cloned().collect();
         for name in dep_names {
+            // Clone the dependency table entry to avoid borrowing issues
             let original = dependencies
                 .get(&name)
                 .cloned()
                 .ok_or(OutdatedError::NoMatchingDependency)?;
+
+            // Check if the dependency has a "path" key
             match original {
                 Value::Table(ref t) if t.contains_key("path") => {
+                    // Check if the path value is a string
                     if let Value::String(ref orig_path) = t["path"] {
+                        // Create a Path from the string value
                         let orig_path = Path::new(orig_path);
+
+                        // Check if the path is relative
                         if orig_path.is_relative() {
+                            // Calculate the relative path
                             let relative = {
                                 let delimiter: &[_] = &['/', '\\'];
                                 let relative = &tmp_manifest.to_string_lossy()
@@ -661,41 +670,30 @@ impl<'tmp> TempProject<'tmp> {
                                 relative.pop();
                                 relative.join(orig_path)
                             };
+
+                            // Check if the relative path with a "Cargo.toml" exists
                             if !tmp_root.join(&relative).join("Cargo.toml").exists() {
-                                if self.options.root_deps_only {
-                                    dependencies.remove(&name);
-                                    // Check if the current dependency is using an alias
-                                    if let Some(alias_name) =
-                                        dependencies.iter().find_map(|(k, v)| {
-                                            if let Value::Table(t) = v {
-                                                if let Some(Value::String(s)) = t.get("package") {
-                                                    // If the package name matches the current dependency, return the alias
-                                                    if s == &name {
-                                                        Some(k.to_string())
-                                                    } else {
-                                                        None
-                                                    }
-                                                } else {
-                                                    None
-                                                }
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                    {
-                                        // If an alias is found, insert the alias into the skipped set
-                                        skipped.insert(alias_name);
+                                // Determine the alias name for the package, if any
+                                let alias_name = if t.contains_key("package") {
+                                    if let Value::String(ref package_name) = t["package"] {
+                                        package_name.to_string()
                                     } else {
-                                        if t.contains_key("package") {
-                                            if let Value::String(ref package_name) = t["package"] {
-                                                skipped.insert(package_name.to_string());
-                                            }
-                                        } else {
-                                            skipped.insert(name);
-                                        }
+                                        name.clone()
                                     }
                                 } else {
+                                    name.clone()
+                                };
+
+                                // If the option is set to only update root dependencies
+                                if self.options.root_deps_only {
+                                    // Remove the dependency from the table and add the alias_name to the skipped set
+                                    dependencies.remove(&name);
+                                    skipped.insert(alias_name);
+                                } else {
+                                    // Clone the dependency table entry
                                     let mut replaced = t.clone();
+
+                                    // Replace the "path" value with an absolute path
                                     replaced.insert(
                                         "path".to_owned(),
                                         Value::String(
@@ -704,6 +702,8 @@ impl<'tmp> TempProject<'tmp> {
                                                 .to_string(),
                                         ),
                                     );
+
+                                    // Update the dependency in the table
                                     dependencies.insert(name, Value::Table(replaced));
                                 }
                             }
@@ -754,15 +754,12 @@ fn manifest_paths(elab: &ElaborateWorkspace<'_>) -> CargoResult<Vec<PathBuf>> {
         workspace_path: &str,
         visited: &mut HashSet<PackageId>,
         manifest_paths: &mut Vec<PathBuf>,
-    ) -> Result<(), Error> {
+    ) -> CargoResult<()> {
         if visited.contains(&pkg_id) {
             return Ok(());
         }
         visited.insert(pkg_id);
-        let pkg = elab
-            .pkgs
-            .get(&pkg_id)
-            .ok_or_else(|| anyhow!("No package found for the given PackageId: {}", pkg_id))?;
+        let pkg = &elab.pkgs[&pkg_id];
         let pkg_path = pkg.root().to_string_lossy();
 
         // Checking if there's a CARGO_HOME set and that it is not an empty string
