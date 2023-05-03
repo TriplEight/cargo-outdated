@@ -293,6 +293,8 @@ impl<'ela> ElaborateWorkspace<'ela> {
             let depth = path.len() as i32 - 1;
             // generate lines
             let pkg_status = self.pkg_status.borrow_mut();
+            // Debug
+            println!("pkg_status = {:?}", pkg_status);
             let status = pkg_status
                 .get(&path)
                 .ok_or_else(|| OutdatedError::MissingEntry)?;
