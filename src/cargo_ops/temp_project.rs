@@ -759,10 +759,16 @@ fn manifest_paths(elab: &ElaborateWorkspace<'_>) -> CargoResult<Vec<PathBuf>> {
             return Ok(());
         }
         visited.insert(pkg_id);
-        let pkg = elab
-            .pkgs
-            .get(&pkg_id)
-            .ok_or_else(|| anyhow!("No package found for the given PackageId: {}", pkg_id))?;
+        let pkg = match elab.pkgs.get(&pkg_id) {
+            Some(pkg) => pkg,
+            None => {
+                eprintln!(
+                    "Warning: Skipping package with PackageId: {} (not found in the elaborated workspace)",
+                    pkg_id
+                );
+                return Ok(());
+            }
+        };
         let pkg_path = pkg.root().to_string_lossy();
 
         // Checking if there's a CARGO_HOME set and that it is not an empty string
