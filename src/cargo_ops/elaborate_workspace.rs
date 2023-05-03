@@ -292,7 +292,11 @@ impl<'ela> ElaborateWorkspace<'ela> {
 
             let depth = path.len() as i32 - 1;
             // generate lines
-            let status = &self.pkg_status.borrow_mut()[&path];
+            let status = self
+                .pkg_status
+                .borrow_mut()
+                .get(&path)
+                .ok_or_else(|| OutdatedError::MissingEntry)?;
             if (status.compat.is_changed() || status.latest.is_changed())
                 && (options.packages.is_empty() || options.packages.contains(&name))
             {
