@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, Context, Error};
 use cargo::core::{Dependency, PackageId, QueryKind, Source, Summary, Verbosity, Workspace};
 use cargo::ops::{update_lockfile, UpdateOptions};
 use cargo::sources::config::SourceConfigMap;
@@ -754,12 +754,15 @@ fn manifest_paths(elab: &ElaborateWorkspace<'_>) -> CargoResult<Vec<PathBuf>> {
         workspace_path: &str,
         visited: &mut HashSet<PackageId>,
         manifest_paths: &mut Vec<PathBuf>,
-    ) -> CargoResult<()> {
+    ) -> Result<(), Error> {
         if visited.contains(&pkg_id) {
             return Ok(());
         }
         visited.insert(pkg_id);
-        let pkg = &elab.pkgs[&pkg_id];
+        let pkg = elab
+            .pkgs
+            .get(&pkg_id)
+            .ok_or_else(|| anyhow!("No package found for the given PackageId"))?;
         let pkg_path = pkg.root().to_string_lossy();
 
         // Checking if there's a CARGO_HOME set and that it is not an empty string
