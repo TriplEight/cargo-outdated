@@ -664,17 +664,12 @@ impl<'tmp> TempProject<'tmp> {
                             if !tmp_root.join(&relative).join("Cargo.toml").exists() {
                                 if self.options.root_deps_only {
                                     dependencies.remove(&name);
-
-                                    if t.contains_key("package") {
-                                        if let Value::String(ref package_name) = t["package"] {
-                                            skipped.insert(package_name.to_string());
-                                        } else {
-                                            skipped.insert(name);
-                                        }
-                                    } else if let Some(package_name) =
+                                    // Check if the current dependency is using an alias
+                                    if let Some(alias_name) =
                                         dependencies.iter().find_map(|(k, v)| {
                                             if let Value::Table(t) = v {
                                                 if let Some(Value::String(s)) = t.get("package") {
+                                                    // If the package name matches the current dependency, return the alias
                                                     if s == &name {
                                                         Some(k.to_string())
                                                     } else {
@@ -688,9 +683,16 @@ impl<'tmp> TempProject<'tmp> {
                                             }
                                         })
                                     {
-                                        skipped.insert(package_name);
+                                        // If an alias is found, insert the alias into the skipped set
+                                        skipped.insert(alias_name);
                                     } else {
-                                        skipped.insert(name);
+                                        if t.contains_key("package") {
+                                            if let Value::String(ref package_name) = t["package"] {
+                                                skipped.insert(package_name.to_string());
+                                            }
+                                        } else {
+                                            skipped.insert(name);
+                                        }
                                     }
                                 } else {
                                     let mut replaced = t.clone();
