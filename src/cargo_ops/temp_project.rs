@@ -762,7 +762,7 @@ fn manifest_paths(elab: &ElaborateWorkspace<'_>) -> CargoResult<Vec<PathBuf>> {
         let pkg = elab
             .pkgs
             .get(&pkg_id)
-            .ok_or_else(|| anyhow!("No package found for the given PackageId"))?;
+            .ok_or_else(|| anyhow!("No package found for the given PackageId: {}", pkg_id))?;
         let pkg_path = pkg.root().to_string_lossy();
 
         // Checking if there's a CARGO_HOME set and that it is not an empty string
