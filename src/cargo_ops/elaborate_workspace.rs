@@ -51,11 +51,15 @@ pub struct Metadata {
 }
 
 impl Ord for Metadata {
-    fn cmp(&self, other: &Self) -> Ordering { self.name.cmp(&other.name) }
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name.cmp(&other.name)
+    }
 }
 
 impl PartialOrd for Metadata {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl<'ela> ElaborateWorkspace<'ela> {
@@ -237,7 +241,11 @@ impl<'ela> ElaborateWorkspace<'ela> {
                 latest_pkg,
                 status
             );
-            self.pkg_status.borrow_mut().insert(path.clone(), status);
+            // Debug
+            println!("Path: {:?}", path);
+            if self.pkg_status.borrow_mut().insert(path.clone(), status).is_some() {
+                println!("Replacing existing entry for path: {:?}", path);
+            }
             // next layer
             // this unwrap is safe since we first check if it is None :)
             if options.depth.is_none() || depth < options.depth.unwrap() {
@@ -288,7 +296,12 @@ impl<'ela> ElaborateWorkspace<'ela> {
 
             let depth = path.len() as i32 - 1;
             // generate lines
-            let status = &self.pkg_status.borrow_mut()[&path];
+            let pkg_status = self.pkg_status.borrow_mut();
+            // Debug
+            println!("pkg_status = {:?}", pkg_status);
+            let status = pkg_status
+                .get(&path)
+                .ok_or_else(|| OutdatedError::MissingEntry)?;
             if (status.compat.is_changed() || status.latest.is_changed())
                 && (options.packages.is_empty() || options.packages.contains(&name))
             {
