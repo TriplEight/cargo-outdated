@@ -6,7 +6,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use anyhow::{Error, Context, anyhow};
+use anyhow::{anyhow, Context, Error};
 use cargo::core::{Dependency, PackageId, QueryKind, Source, Summary, Verbosity, Workspace};
 use cargo::ops::{update_lockfile, UpdateOptions};
 use cargo::sources::config::SourceConfigMap;
@@ -640,7 +640,7 @@ impl<'tmp> TempProject<'tmp> {
         tmp_root: &Path,
         tmp_manifest: &Path,
         skipped: &mut HashSet<String>,
-    ) -> CargoResult<()> {
+    ) -> Result<(), Error> {
         let dep_names: Vec<_> = dependencies.keys().cloned().collect();
         for name in dep_names {
             let original = dependencies
@@ -671,6 +671,24 @@ impl<'tmp> TempProject<'tmp> {
                                         } else {
                                             skipped.insert(name);
                                         }
+                                    } else if let Some(package_name) =
+                                        dependencies.iter().find_map(|(k, v)| {
+                                            if let Value::Table(t) = v {
+                                                if let Some(Value::String(s)) = t.get("package") {
+                                                    if s == &name {
+                                                        Some(k.to_string())
+                                                    } else {
+                                                        None
+                                                    }
+                                                } else {
+                                                    None
+                                                }
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                    {
+                                        skipped.insert(package_name);
                                     } else {
                                         skipped.insert(name);
                                     }
@@ -739,7 +757,10 @@ fn manifest_paths(elab: &ElaborateWorkspace<'_>) -> CargoResult<Vec<PathBuf>> {
             return Ok(());
         }
         visited.insert(pkg_id);
-        let pkg = elab.pkgs.get(&pkg_id).ok_or_else(|| anyhow!("No package found for the given PackageId: {}", pkg_id))?;
+        let pkg = elab
+            .pkgs
+            .get(&pkg_id)
+            .ok_or_else(|| anyhow!("No package found for the given PackageId: {}", pkg_id))?;
         let pkg_path = pkg.root().to_string_lossy();
 
         // Checking if there's a CARGO_HOME set and that it is not an empty string
