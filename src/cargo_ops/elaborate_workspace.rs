@@ -241,7 +241,11 @@ impl<'ela> ElaborateWorkspace<'ela> {
                 latest_pkg,
                 status
             );
-            self.pkg_status.borrow_mut().insert(path.clone(), status);
+            // Debug
+            println!("Path: {:?}", path);
+            if self.pkg_status.borrow_mut().insert(path.clone(), status).is_some() {
+                println!("Replacing existing entry for path: {:?}", path);
+            }
             // next layer
             // this unwrap is safe since we first check if it is None :)
             if options.depth.is_none() || depth < options.depth.unwrap() {
